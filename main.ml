@@ -23,17 +23,10 @@ type bin_op =
   | EqualOp
   | AndOp
   | OrOp 
-    
-type value = 
-    VInt of int 
-  | VBool of bool 
-  | VFun of string * expr * env 
-  | VPair of expr * expr 
-  | VList of expr list 
-  | VMaybe of value option
+  
         
 type env = 
-  (variable * result) list
+  (variable * langType) list
     
 (*exp representa as expressões da linguagem*) 
 type expr = 
@@ -43,54 +36,62 @@ type expr =
   | IfExpr of expr * expr * expr
   | VarExpr of variable
   | AppExpr of expr * expr
-  | FunExpr of variable * typ * expr
-  | LetExpr of variable * typ * expr * expr
-  | LetRecExpr of variable * typ * typ * expr * expr
+  | FunExpr of variable * langType * expr
+  | LetExpr of variable * langType * expr * expr
+  | LetRecExpr of variable * langType * langType * expr * expr
   | TupleExpr of expr * expr
   | FstExpr of expr
   | SndExpr of expr
-  | NilExpr of typ
+  | NilExpr of langType
   | ConsExpr of expr * expr
   | MatchExpr of expr * expr * variable * variable * expr
   | JustExpr of expr
-  | NothingExpr of typ
+  | NothingExpr of langType
   | MatchMaybeExpr of expr * variable * expr * variable * expr 
 
+type value = 
+    VInt of int 
+  | VBool of bool 
+  | VFun of string * expr * env 
+  | VPair of expr * expr 
+  | VList of expr list 
+  | VMaybe of value option
 
-
-
+        (*exceções*)
+exception TypeError of string
 
 
 (*comecar o typeinfer*)
 
-let rec typeInfer (env:env) (e:expr)
-	match e with
-	| NUMERO _ -> TypeInt
-	| VAriable x -> (*precisa ver*)
-	| BoolExpr _ -> TypeBool
+let rec typeInfer (env:env) (e:expr) =
+  match e with
+  | IntExpr _ -> IntType
+  | VarExpr x -> IntType(*precisa ver*)
+  | BoolExpr _ -> BoolType
 
-	| TupleExpr (e1,e2) -> 
-		let t1 = typeInfer env e1 in
-		let t2 = typeInfer env e2 in
-		TupleType(t1,t2)  
+  | TupleExpr (e1,e2) -> 
+      let t1 = typeInfer env e1 in
+      let t2 = typeInfer env e2 in
+      TupleType(t1,t2)  
 
-	| FirstExpr e1 ->
-		let t1 = typeInfer env e1 in
-		(match t1 with
-			TupleType(t,_) -> t
-			| _ 		   -> raise(TypeError "argumento não é par ordenado"))
+  | FstExpr e1 ->
+      let t1 = typeInfer env e1 in
+      (match t1 with
+         TupleType(t,_) -> t
+       | _ 		   -> raise(TypeError "argumento não é par ordenado"))
 
-	| SecondExpr e1 ->
-		let t1 = typeInfer env e1 in
-		(match t1 with
-			TupleType(_,t) -> t
-			| _ 		   -> raise(TypeError "argumento não é par ordenado"))
+  | SndExpr e1 ->
+      let t1 = typeInfer env e1 in
+      (match t1 with
+         TupleType(_,t) -> t
+       | _ 		   -> raise(TypeError "argumento não é par ordenado"))
 
-	| IfExpr (e1,e2,e3) ->
-		let t1 = typeInfer env e1 in
-		(match t1 with
-                    TypeBool ->
-				let t2 = typeInfer env e2 in
-				let t3 = typeInfer env e3 in
-				if t2 = t3 then t2 else raise (TypeError "parâmetros de tipos diferentes")
-			|          -> raise (TypeError "primeiro parâmetro do if não é booleano")
+  | IfExpr (e1,e2,e3) ->
+      let t1 = typeInfer env e1 in
+      (match t1 with
+         BoolType ->
+           let t2 = typeInfer env e2 in
+           let t3 = typeInfer env e3 in
+           if t2 = t3 then t2 else raise (TypeError "parâmetros de tipos diferentes")
+       | _          -> raise (TypeError "primeiro parâmetro do if não é booleano")) 
+  
