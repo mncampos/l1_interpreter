@@ -1,4 +1,4 @@
-# Interpretador da linguage L1 - Semântica Formal/UFRGS
+# Interpretador da linguagem L1 - Semântica Formal/UFRGS
 Formal semantics final assignment
 
 # Integrantes
