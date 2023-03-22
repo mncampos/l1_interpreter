@@ -26,7 +26,7 @@ type bin_op =
   
         
 type env = 
-  (variable * langType) list
+  (variable * langType) list 
     
 (*exp representa as expressões da linguagem*) 
 type expr = 
@@ -60,14 +60,34 @@ type value =
         (*exceções*)
 exception TypeError of string
 
+    
+
+      (*funçoes auxiliares*)
+
+let rec lookup env variable = 
+  match env with
+    [] -> None
+  | (fstElement, typeElement) :: tl -> 
+      if (fstElement=variable) 
+      then Some typeElement 
+      else lookup tl variable
+
+
+
 
 (*comecar o typeinfer*)
 
 let rec typeInfer (env:env) (e:expr) =
   match e with
   | IntExpr _ -> IntType
-  | VarExpr x -> IntType(*precisa ver*)
-  | BoolExpr _ -> BoolType
+  | VarExpr x -> (match lookup env x with 
+        Some t -> t
+      | None -> raise (TypeError ("Variavel não declarada:" ^ x)))
+  | BoolExpr _ -> BoolType 
+  | NothingExpr x -> MaybeType x 
+  | JustExpr e1 -> MaybeType (typeInfer env e1)
+  | NilExpr x -> ListType x
+                   
 
   | TupleExpr (e1,e2) -> 
       let t1 = typeInfer env e1 in
@@ -94,4 +114,43 @@ let rec typeInfer (env:env) (e:expr) =
            let t3 = typeInfer env e3 in
            if t2 = t3 then t2 else raise (TypeError "parâmetros de tipos diferentes")
        | _          -> raise (TypeError "primeiro parâmetro do if não é booleano")) 
-  
+      
+  | BinOpExpr (op, e1, e2) ->
+      let t1 = typeInfer env e1 in
+      let t2 = typeInfer env e2 in
+      (match op with
+         AddOp | SubOp | MultOp | DivOp ->
+           (match (t1, t2) with
+              (IntType, IntType) -> IntType
+            | _ -> raise (TypeError "Operação aritmética aplicada a tipos inválidos"))
+       | LessThanOp | LessEqualOp | GreaterThanOp | GreaterEqualOp | EqualOp ->
+           (match (t1, t2) with
+              (IntType, IntType) | (BoolType, BoolType) -> BoolType
+            | _ -> raise (TypeError "Operação de comparação aplicada a tipos inválidos"))
+       | AndOp | OrOp ->
+           (match (t1, t2) with
+              (BoolType, BoolType) -> BoolType
+            | _ -> raise (TypeError "Operação lógica aplicada a tipos inválidos")))
+
+
+  | AppExpr (e1, e2) -> 
+      let t1 = typeInfer env e1 in
+      let t2 = typeInfer env e2 in
+      (match t1 with
+       | FuncType (t11, t12) -> 
+           if t2 = t11 then t12 
+           else raise (TypeError ("Tipo incorreto para argumento da aplicação de função."))
+       | _ -> raise (TypeError ("Aplicação de função em expressão que não é função")))
+
+
+
+
+
+
+
+
+
+
+
+        (*testes*)
+let envTeste = [("alvaro", IntType)]
