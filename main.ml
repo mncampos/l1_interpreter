@@ -142,6 +142,55 @@ let rec typeInfer (env:env) (e:expr) =
            else raise (TypeError ("Tipo incorreto para argumento da aplicação de função."))
        | _ -> raise (TypeError ("Aplicação de função em expressão que não é função")))
 
+  | FunExpr (e1, e2, e3) -> IntType (*Arrumar aqui*)
+  | MatchExpr (e1, e2, v1, v2, e3) -> IntType (*Arrumar Aqui*)
+  | MatchMaybeExpr (e1, e2, v1, v2, e3) ->IntType (*Arrumar aqui*)
+  | ConsExpr (e1, e2) -> IntType (*Arrumar aqui*)
+                                 
+  | LetExpr (v1, t1, e1, e2) -> 
+      if (typeInfer env e1) = t1 then typeInfer (update env v1 t1) e2 
+      else raise (TypeError "Expressão não é do tipo declarado")    
+          
+  | LetRecExpr (f,(FuncType (t1,t2) as tf), Fn(x,tx,e1), e2) -> 
+      let env_com_tf = update env f tf in 
+      let env_com_tf_tx = update env_com_tf x tx in
+      if (typeinfer env_com_tf_tx e1) = t2 then typeinfer env_com_tf e2
+      else raise (TypeError "Tipo da funcao diferente do declarado") (*Ver melhor se tá certo*)
+                                   
+  | LetRecExpr _ -> raise CannotHappen 
+                                    
+                                    
+          (*Ending typeInfer*)
+
+
+                      (*Auxiliary types ver se precisa usar a memoria*)
+type endereco = int
+  
+type memoria = (endereco * value) list
+    
+
+type resultado = (value * memoria)  
+
+                                                                     
+                                                                     
+          (*starting Evaluation*)                                           
+                                                                     
+let rec eval (env:env) (e:expr) : (value) =
+  match e with
+    IntExpr n -> (VInt n)
+                 
+  | BoolExpr b -> (VBool b)
+                  
+  | IfExpr (e1,e2,e3) ->
+      (match eval env e1 with
+         (VBool true) -> eval env e2
+       | (VBool false) -> eval env e3
+       | _ -> raise CannotHappen)
+                                                                     
+             
+
+
+
 
 
 
