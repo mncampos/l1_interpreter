@@ -1,3 +1,7 @@
+(* This is an OCaml editor.
+   Enter your program here and send it to the toplevel using the "Eval code"
+   button or [Ctrl-e]. *)
+
 type variable = string  
 
 (*langType representa os tipos da linguagem*)
@@ -15,7 +19,7 @@ type bin_op =
     AddOp
   | SubOp
   | MultOp
-  | DivOp
+  | DivOp (*acho q não precisa de divisao*)
   | LessThanOp
   | LessEqualOp
   | GreaterThanOp
@@ -38,7 +42,7 @@ type expr =
   | AppExpr of expr * expr
   | FunExpr of variable * langType * expr
   | LetExpr of variable * langType * expr * expr
-  | LetRecExpr of variable * langType * langType * expr * expr
+  | LetRecExpr of variable * langType * expr * expr
   | TupleExpr of expr * expr
   | FstExpr of expr
   | SndExpr of expr
@@ -52,15 +56,15 @@ type expr =
 type value = 
     VInt of int 
   | VBool of bool 
-  | VFun of string * expr * env 
-  | VPair of expr * expr 
-  | VList of expr list 
+  | VFun of string * value * env  (*ver se existe o value de funcao*)
+  | VTuple of value * value 
+  | VList of value list 
   | VMaybe of value option
 
         (*exceções*)
 exception TypeError of string
 
-    
+exception CannotHappen
 
       (*funçoes auxiliares*)
 
@@ -73,7 +77,8 @@ let rec lookup env variable =
       else lookup tl variable
 
 
-
+let  update amb valor tipo = (valor,tipo) :: amb 
+                    
 
 (*comecar o typeinfer*)
 
@@ -151,12 +156,12 @@ let rec typeInfer (env:env) (e:expr) =
       if (typeInfer env e1) = t1 then typeInfer (update env v1 t1) e2 
       else raise (TypeError "Expressão não é do tipo declarado")    
           
-  | LetRecExpr (f,(FuncType (t1,t2) as tf), Fn(x,tx,e1), e2) -> 
+  | LetRecExpr (f,(FuncType (t1,t2) as tf), FunExpr(x,tx,e1), e2) -> 
       let env_com_tf = update env f tf in 
       let env_com_tf_tx = update env_com_tf x tx in
-      if (typeinfer env_com_tf_tx e1) = t2 then typeinfer env_com_tf e2
+      if (typeInfer env_com_tf_tx e1) = t2 then typeInfer env_com_tf e2
       else raise (TypeError "Tipo da funcao diferente do declarado") (*Ver melhor se tá certo*)
-                                   
+                                    
   | LetRecExpr _ -> raise CannotHappen 
                                     
                                     
@@ -171,8 +176,31 @@ type memoria = (endereco * value) list
 
 type resultado = (value * memoria)  
 
-                                                                     
-                                                                     
+  
+
+    (*Auxiliary Functions*)
+let compute (operando: bin_op) (v1: value) (v2: value) : value =
+  match (operando, v1, v2) with
+  
+    (* operadores aritméticos com números *)
+    (AddOp,  VInt n1, VInt n2) -> VInt (n1 + n2)
+  | (SubOp,  VInt n1, VInt n2) -> VInt (n1 - n2)
+  | (MultOp, VInt n1, VInt n2) -> VInt (n1 * n2) 
+                                                
+    (* operadores relacionais com números *)
+  | (EqualOp, VInt n1, VInt n2) -> VBool( n1 = n2) 
+  | (GreaterThanOp, VInt n1, VInt n2) -> VBool( n1 > n2)
+  | (LessThanOp, VInt n1, VInt n2) -> VBool( n1 < n2)
+  | (GreaterEqualOp, VInt n1, VInt n2) -> VBool( n1 >= n2)
+  | (LessEqualOp, VInt n1, VInt n2) -> VBool( n1 <= n2)
+  | (AndOp, VBool b1, VBool b2) -> VBool( b1 && b2)
+  | (OrOp, VBool b1, VBool b2) -> VBool( b1 || b2)
+                                
+  | _ -> raise (TypeError "Tipo Incompatível")
+
+           
+           (*Testar direito isso *)
+
           (*starting Evaluation*)                                           
                                                                      
 let rec eval (env:env) (e:expr) : (value) =
@@ -185,13 +213,29 @@ let rec eval (env:env) (e:expr) : (value) =
       (match eval env e1 with
          (VBool true) -> eval env e2
        | (VBool false) -> eval env e3
-       | _ -> raise CannotHappen)
-                                                                     
-             
-
-
-
-
+       | _ -> raise CannotHappen) 
+      
+        (* | VarExpr x ->
+          (match lookup env x with
+             Some v -> v
+           | None -> (TypeError "Tipo Incompatível"))
+*)
+  | TupleExpr (e1,e2) ->
+      let v1 = eval env e1 in
+      let v2 = eval env e2 in
+      VTuple(v1,v2)
+        
+  | FstExpr e ->
+      (match eval env e with
+       | (VTuple(v1,_)) -> v1
+       | _ -> raise (TypeError "Tipo Incompatível"))
+      
+  | SndExpr e ->
+      (match eval env e with
+       | (VTuple(_,v2)) -> v2
+       | _ -> raise (TypeError "Tipo Incompatível"))
+                                   
+                                    
 
 
 
