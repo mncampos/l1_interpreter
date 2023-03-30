@@ -155,13 +155,12 @@ let rec typeInfer (env:env) (e:expr) =
   | FunExpr(v, t, e) -> FuncType(t, (typeInfer(update_env env v t) e))
                           
                           
-  | MatchExpr (e1, e2, x1, x2, e3) ->
+  | MatchExpr (e, e1, x, xs, e2) ->
       let t1 = typeInfer env e1 in
-      let t2 = typeInfer env e2 in
-      let env' = (x2, ListType t1) :: (x1, t1) :: env in
-      let t3 = typeInfer env' e3 in
-      if t2 = t3 then t2
-      else raise (TypeError "Erro de tipagem na expressão de match")
+      let env' = (xs, ListType t1) :: (x, t1) :: env in
+      let t2 = typeInfer env' e2 in
+      if t2 = typeInfer env e1 then t2
+      else raise (TypeError ("Erro no match"))
           
           
   | MatchMaybeExpr (e1, x, e2, y, e3) ->
@@ -298,7 +297,7 @@ let nilExprTest = NilExpr (IntType) (* langType: ListType IntType *)
 let consExprTest = ConsExpr (IntExpr 1, ConsExpr (IntExpr 2, NilExpr IntType)) (* langType: ListType IntType *)
 let headExprTest = HeadExpr consExprTest (* langType: IntType *)
 let tailExprTest = TailExpr consExprTest (* langType: ListType IntType *)
-let matchExprTest = MatchExpr (consExprTest, IntExpr 0, "x", "y", BinOpExpr (AddOp, VarExpr "x", VarExpr "y")) (* langType: IntType *)
+let matchExprTest = MatchExpr (consExprTest, IntExpr 0, "x", "y", BinOpExpr (AddOp, IntExpr 1, IntExpr 2)) (* langType: IntType *)
 let justExprTest = JustExpr (IntExpr 1) (* langType: MaybeType IntType *)
 let nothingExprTest = NothingExpr IntType (* langType: MaybeType IntType *)
 let matchMaybeExprTest = MatchMaybeExpr (justExprTest, "x", BinOpExpr (AddOp, VarExpr "x", IntExpr 1), "y", VarExpr "y") (* langType: IntType *)
