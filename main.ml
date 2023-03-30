@@ -143,7 +143,6 @@ let rec typeInfer (env:env) (e:expr) =
        | _ -> raise (TypeError ("Aplicação de função em expressão que não é função")))
 
   | FunExpr(v, t, e) -> FuncType(t, (typeInfer(update env v t) e))
-<<<<<<< HEAD
                           
                           
   | MatchExpr (e1, e2, x1, x2, e3) ->
@@ -167,21 +166,14 @@ let rec typeInfer (env:env) (e:expr) =
        | _, _ -> raise (TypeError "Erro de tipagem na expressão de match"))
                                                   
                                                   
-=======
-  | MatchExpr (e1, e2, v1, v2, e3) -> IntType (*Arrumar Aqui*)
-  | MatchMaybeExpr (e1, e2, v1, v2, e3) ->IntType (*Arrumar aqui*)
->>>>>>> 03c11de42d20ae2acfd827f5ed94d2c530c8c8b3
   | ConsExpr (e1, e2) ->
       let t1 = typeInfer env e1 in
       let t2 = typeInfer env e2 in
       if t2 = ListType t1 then t2
       else raise(TypeError("Erro de tipagem na construção da lista"))
-<<<<<<< HEAD
           
           
       
-=======
->>>>>>> 03c11de42d20ae2acfd827f5ed94d2c530c8c8b3
                                  
   | LetExpr (v1, t1, e1, e2) -> 
       if (typeInfer env e1) = t1 then typeInfer (update env v1 t1) e2 
@@ -190,16 +182,11 @@ let rec typeInfer (env:env) (e:expr) =
   | LetRecExpr (var, paramType, returnType, body, expr) ->
       let funEnv = (var, FuncType(paramType, returnType)) :: env in
       let bodyType =
-<<<<<<< HEAD
         typeInfer funEnv body in
-=======
-        typeInfer ((var, FuncType(paramType, returnType)) :: env) body in
->>>>>>> 03c11de42d20ae2acfd827f5ed94d2c530c8c8b3
       if bodyType = returnType then
         typeInfer funEnv expr
       else
         raise (TypeError "Erro de tipagem no letRec")
-<<<<<<< HEAD
           
   | HeadExpr e ->
       (match typeInfer env e with
@@ -213,8 +200,6 @@ let rec typeInfer (env:env) (e:expr) =
       
       
       
-=======
->>>>>>> 03c11de42d20ae2acfd827f5ed94d2c530c8c8b3
                                     
                                                                      
 let rec eval (env:envV) (e:expr) : (value) =
