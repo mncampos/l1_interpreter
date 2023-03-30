@@ -21,7 +21,7 @@ type expr =
   | AppExpr of expr * expr
   | FunExpr of variable * langType * expr
   | LetExpr of variable * langType * expr * expr
-  | LetRecExpr of variable * langType * langType * expr * expr
+  | LetRecExpr of variable * langType * langType * variable * expr * expr
   | PairExpr of expr * expr
   | FstExpr of expr
   | SndExpr of expr
@@ -41,7 +41,7 @@ type value =
   | VList of value list 
   | VMaybe of value option 
   | VClosure of variable * expr * envV
-  | VRecClosure of variable * variable * expr * env
+  | VRecClosure of variable * variable * expr * envV
 and
   env = (variable * langType) list
 and
@@ -51,6 +51,7 @@ and
 exception TypeError of string 
 exception CannotHappen 
 exception NotFound
+exception EvalError of string
 
       (*funçoes auxiliares*)
 
@@ -59,7 +60,7 @@ exception NotFound
 let rec lookup env variable : langType = match env with
     [] -> raise NotFound
   | (name, v)::tl ->
-      if (name == variable)      
+      if (name = variable)      
       then v                     
       else lookup tl variable;;
 
@@ -72,11 +73,20 @@ let rec lookupV env variable : value = match env with
       else lookupV tl variable 
           
 
-let  update env valor tipo = (valor,tipo) :: env
+          (*let  update env valor tipo = (valor,tipo) :: env*)
                              
-let updateV variable v environment : envV = match environment with
-  | [] -> [(variable, v)]
-  | hd::tl -> List.append [(variable, v)] environment ;;
+let rec update_env (env: env) (var: variable) (typ: langType) : env =
+  match env with
+  | [] -> [(var, typ)]
+  | (v, _)::tl when v = var -> (var, typ)::tl
+  | hd::tl -> hd :: update_env tl var typ
+                             
+                             
+let rec update_envV (envV: envV) (var: variable) (value: value) : envV =
+  match envV with
+  | [] -> [(var, value)]
+  | (v, _)::tl when v = var -> (var, value)::tl
+  | hd::tl -> hd :: update_envV tl var value
                              
   
 let rec typeInfer (env:env) (e:expr) =
@@ -142,7 +152,7 @@ let rec typeInfer (env:env) (e:expr) =
            else raise (TypeError ("Tipo incorreto para argumento da aplicação de função."))
        | _ -> raise (TypeError ("Aplicação de função em expressão que não é função")))
 
-  | FunExpr(v, t, e) -> FuncType(t, (typeInfer(update env v t) e))
+  | FunExpr(v, t, e) -> FuncType(t, (typeInfer(update_env env v t) e))
                           
                           
   | MatchExpr (e1, e2, x1, x2, e3) ->
@@ -176,17 +186,17 @@ let rec typeInfer (env:env) (e:expr) =
       
                                  
   | LetExpr (v1, t1, e1, e2) -> 
-      if (typeInfer env e1) = t1 then typeInfer (update env v1 t1) e2 
+      if (typeInfer env e1) = t1 then typeInfer (update_env env v1 t1) e2 
       else raise (TypeError "Expressão não é do tipo declarado")    
           
-  | LetRecExpr (var, paramType, returnType, body, expr) ->
-      let funEnv = (var, FuncType(paramType, returnType)) :: env in
-      let bodyType =
-        typeInfer funEnv body in
-      if bodyType = returnType then
-        typeInfer funEnv expr
-      else
-        raise (TypeError "Erro de tipagem no letRec")
+  | LetRecExpr (f, t1, t2, x, e1, e2) -> 
+      let env' = update_env env f t1 in
+      let env'' = update_env env' x t2 in
+      if typeInfer env'' e1 = t2 
+      then typeInfer env' e2
+      else raise (TypeError "erro de tipagem no LetRec")
+        
+        
           
   | HeadExpr e ->
       (match typeInfer env e with
@@ -252,14 +262,65 @@ let rec eval (env:envV) (e:expr) : (value) =
   | LetExpr (x, t, e1, e2) ->
       let v = eval env e1 in
       let env' = (x, v) :: env in
-      eval env e2
+      eval env' e2
         
 
+        
+  | AppExpr(e1, e2) ->
+      let exp1 = eval env e1 in
+      let exp2 = eval env e2 in
+      (match exp1, exp2 with
+         VClosure(variable, e, env'), value -> eval (update_envV env' variable value) e
+       | VRecClosure(f, x, e, env'), value -> eval (update_envV (update_envV env' x value) f (VRecClosure(f, x, e, env')) ) e
+       | _ -> raise (EvalError "Erro de avaliação"))
 
 
 
 
-
-        (*testes*)
-let envTeste = [("alvaro", IntType)]
+        (*testes typeInfer*)
+let envTest = [("x", IntType)] ;;
+let env2Test = [("f", (FuncType (IntType, IntType)))];; 
+               
+let intExprTest = IntExpr(1);;
+let trueTest = BoolExpr(true);;
+let falseTest = BoolExpr(false);;
+let binOpExprTest = BinOpExpr (AddOp, IntExpr 3, IntExpr 4);;  
+let ifExprTest = IfExpr (BoolExpr true, IntExpr 1, IntExpr 2) (* langType: IntType *)
+let varExprTest = VarExpr "x" (* langType: VarType "x" *)
+let appExprTest = AppExpr (VarExpr "f", IntExpr 42) (* langType: VarType "f" *)
+let funExprTest = FunExpr ("x", IntType, BinOpExpr (AddOp, VarExpr "x", IntExpr 1)) (* langType: FuncType (IntType, IntType) *)
+let letExprTest = LetExpr ("x", IntType, IntExpr 42, VarExpr "x") (* langType: IntType *) 
+let letRecExprTest = LetRecExpr ("f", FuncType (IntType, IntType), IntType, "x", BinOpExpr (AddOp, VarExpr "x", IntExpr 1), AppExpr (VarExpr "f", IntExpr 2)) (* langType: intType  *)
+let pairExprTest = PairExpr (IntExpr 1, BoolExpr true) (* langType: PairType (IntType, BoolType) *)
+let fstExprTest = FstExpr pairExprTest (* langType: IntType *)
+let sndExprTest = SndExpr pairExprTest (* langType: BoolType *)
+let nilExprTest = NilExpr (IntType) (* langType: ListType IntType *)
+let consExprTest = ConsExpr (IntExpr 1, ConsExpr (IntExpr 2, NilExpr IntType)) (* langType: ListType IntType *)
+let headExprTest = HeadExpr consExprTest (* langType: IntType *)
+let tailExprTest = TailExpr consExprTest (* langType: ListType IntType *)
+let matchExprTest = MatchExpr (consExprTest, IntExpr 0, "x", "y", BinOpExpr (AddOp, VarExpr "x", VarExpr "y")) (* langType: IntType *)
+let justExprTest = JustExpr (IntExpr 1) (* langType: MaybeType IntType *)
+let nothingExprTest = NothingExpr IntType (* langType: MaybeType IntType *)
+let matchMaybeExprTest = MatchMaybeExpr (justExprTest, "x", BinOpExpr (AddOp, VarExpr "x", IntExpr 1), "y", VarExpr "y") (* langType: IntType *)
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   
