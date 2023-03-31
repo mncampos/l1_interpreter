@@ -268,11 +268,17 @@ let rec eval (env:envV) (e:expr) : (value) =
        | _ -> raise (TypeError "Tipo Incompatível"))
   
   | FunExpr (x, typ, expr) -> VClosure (x, expr, env)
+                                
+                                
   
   | LetExpr (x, t, e1, e2) ->
       let v = eval env e1 in
       let env' = (x, v) :: env in
       eval env' e2 
+        
+  | LetRecExpr(f,t1,t2,x, e1, e2) when t1 = t2 ->
+      let env'= update_envV env f (VRecClosure(f,x,e1,env))
+      in eval env' e2
         
   | AppExpr(e1, e2) ->
       let exp1 = eval env e1 in
@@ -300,8 +306,9 @@ let rec eval (env:envV) (e:expr) : (value) =
   | MatchMaybeExpr (e1,x,e2,y,e3) -> (*ver se precisa do x mesmo*)
       (let v1 = eval env e1 in
        match v1 with
-       | VNothing -> eval env e2
-       | VJust y -> eval env e3)
+       | VMaybe None -> eval env e2
+       | VMaybe(Some y) -> eval (update_envV env x y) e3
+       | _ -> raise (EvalError "erro"))
 
       
   | _ -> raise (EvalError "Erro de avaliação")
@@ -348,10 +355,10 @@ let env_test : envV = [
   
 let appExprTestEval = AppExpr (appExprTest, binOpExprTest) (*Valor esperado com env_test = VInt 49 *)
   
+let randenv : envV = [("y", VMaybe (Some (VInt 10)))] 
+let evalMatchMaybe = (MatchMaybeExpr (VarExpr "x", "y", VarExpr "y", "z", IntExpr 0))
   
-  
-  
-  
+
   
   
   
