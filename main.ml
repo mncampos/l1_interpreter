@@ -297,6 +297,13 @@ let rec eval (env:envV) (e:expr) : (value) =
        | VCons(_, v2) -> v2
        | _ -> raise (EvalError "Erro de avaliação de lista"))
       
+  | MatchMaybeExpr (e1,x,e2,y,e3) -> (*ver se precisa do x mesmo*)
+      (let v1 = eval env e1 in
+       match v1 with
+       | VNothing -> eval env e2
+       | VJust y -> eval env e3)
+
+      
   | _ -> raise (EvalError "Erro de avaliação")
 
 
