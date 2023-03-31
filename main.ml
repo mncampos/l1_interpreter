@@ -32,7 +32,7 @@ type expr =
   | MatchExpr of expr * expr * variable * variable * expr
   | JustExpr of expr
   | NothingExpr of langType
-  | MatchMaybeExpr of expr * variable * expr * variable * expr 
+  | MatchMaybeExpr of expr * variable * expr *  expr 
 
 type value = 
     VInt of int 
@@ -165,16 +165,17 @@ let rec typeInfer (env:env) (e:expr) =
       else raise (TypeError ("Erro no match"))
           
           
-  | MatchMaybeExpr (e1, x, e2, y, e3) ->
+  | MatchMaybeExpr (e1, x, e2, e3) ->
       let t1 = typeInfer env e1 in
       let t2 = typeInfer env e2 in
       let env' = (x, t1) :: env in
-      let env'' = (y, t1) :: env' in
-      let t3 = typeInfer env'' e3 in
+      let t3 = typeInfer env' e3 in
       (match t2, t3 with
-       | VarType v, t' when v = y && t1 = t' -> t2
+       | VarType v, t' when v = x && t1 = t' -> t2
        | _, _ when t2 = t3 -> t2
        | _, _ -> raise (TypeError "Erro de tipagem na expressão de match"))
+      
+
                                                   
                                                   
   | ConsExpr (e1, e2) ->
@@ -303,22 +304,29 @@ let rec eval (env:envV) (e:expr) : (value) =
        | VCons(_, v2) -> v2
        | _ -> raise (EvalError "Erro de avaliação de lista"))
       
-  | MatchMaybeExpr (e1,x,e2,y,e3) -> (*ver se precisa do x mesmo*)
+  | MatchMaybeExpr (e1,x,e2,e3) -> (*ver se precisa do x mesmo*)
       (let v1 = eval env e1 in
        match v1 with
        | VMaybe None -> eval env e2
        | VMaybe(Some y) -> eval (update_envV env x y) e3
        | _ -> raise (EvalError "erro"))
 
+  | MatchExpr (e1,e2, x, y, e3) -> (*ver se precisa do x mesmo*)
+      (let v1 = eval env e1 in
+       match v1 with
+       | VNil -> eval env e2
+       | VCons (vh, vt) -> eval (update_envV (update_envV env x vh) y vt) e3
+       | _ -> raise (EvalError "erro"))
       
   | _ -> raise (EvalError "Erro de avaliação")
 
+           
 
 
         (*testes typeInfer*)
 let envTest = [("x", IntType)] ;;
 let env2Test = [("f", (FuncType (IntType, IntType)))];; 
-
+let typenv : env = [("x", IntType)]
                
 let intExprTest = IntExpr(1);;
 let trueTest = BoolExpr(true);;
@@ -340,8 +348,7 @@ let tailExprTest = TailExpr consExprTest (* langType: ListType IntType *)
 let matchExprTest = MatchExpr (consExprTest, IntExpr 0, "x", "y", BinOpExpr (AddOp, IntExpr 1, IntExpr 2)) (* langType: IntType *)
 let justExprTest = JustExpr (IntExpr 1) (* langType: MaybeType IntType *)
 let nothingExprTest = NothingExpr IntType (* langType: MaybeType IntType *)
-let matchMaybeExprTest = MatchMaybeExpr (justExprTest, "x", BinOpExpr (AddOp, VarExpr "x", IntExpr 1), "y", VarExpr "y") (* langType: IntType *)
-  
+let tInferMatchMaybe = (MatchMaybeExpr (NothingExpr (IntType), "y", JustExpr (IntExpr 1), VarExpr "y")) ;; 
   
   
   
@@ -352,11 +359,13 @@ let env_test : envV = [
   ("true", VBool(true));
   ("false", VBool(false))
 ]
-  
+
+let evalMatchMaybe = (MatchMaybeExpr (NothingExpr (IntType), "y", JustExpr (IntExpr 1), VarExpr "y")) ;;   
 let appExprTestEval = AppExpr (appExprTest, binOpExprTest) (*Valor esperado com env_test = VInt 49 *)
-  
-let randenv : envV = [("y", VMaybe (Some (VInt 10)))] 
-let evalMatchMaybe = (MatchMaybeExpr (VarExpr "x", "y", VarExpr "y", "z", IntExpr 0))
+let valMatchExprTest = MatchExpr ( ConsExpr (IntExpr 1, ConsExpr (IntExpr 2, NilExpr IntType)), IntExpr 4, "x", "y", VarExpr "x");; 
+let randenv : envV = [("x", VMaybe (Some (VInt 10)))] 
+    (*| MatchMaybeExpr of expr * variable * expr * variable * expr *)
+
   
 
   
