@@ -38,10 +38,12 @@ type value =
     VInt of int 
   | VBool of bool 
   | VPair of value * value 
-  | VList of value list 
+  | VCons of value * value 
   | VMaybe of value option 
   | VClosure of variable * expr * envV
   | VRecClosure of variable * variable * expr * envV
+  | VNil
+    
 and
   env = (variable * langType) list
 and
@@ -71,10 +73,9 @@ let rec lookupV env variable : value = match env with
       if (firstElement = variable)      
       then v                     
       else lookupV tl variable 
+  
           
-
-          (*let  update env valor tipo = (valor,tipo) :: env*)
-                             
+          (* Update no env de tipos *)
 let rec update_env (env: env) (var: variable) (typ: langType) : env =
   match env with
   | [] -> [(var, typ)]
@@ -82,6 +83,7 @@ let rec update_env (env: env) (var: variable) (typ: langType) : env =
   | hd::tl -> hd :: update_env tl var typ
                              
                              
+                (*Já este é no de valores *)
 let rec update_envV (envV: envV) (var: variable) (value: value) : envV =
   match envV with
   | [] -> [(var, value)]
@@ -224,6 +226,15 @@ let rec eval (env:envV) (e:expr) : (value) =
          (VBool true) -> eval env e2
        | (VBool false) -> eval env e3
        | _ -> raise CannotHappen) 
+      
+  | NilExpr (v) -> VNil
+    
+  | NothingExpr(t) -> VMaybe(None)
+    
+  | JustExpr(e) ->
+      let v = eval env e in
+      (match v with 
+       | _ -> v)
   
   | BinOpExpr (op, e1, e2) ->
       let v1 = eval env e1 in
@@ -239,7 +250,7 @@ let rec eval (env:envV) (e:expr) : (value) =
        | (EqualOp, VInt n1, VInt n2) -> VBool (n1 = n2)
        | (AndOp, VBool b1, VBool b2) -> VBool (b1 && b2)
        | (OrOp, VBool b1, VBool b2) -> VBool (b1 || b2)
-       | _ -> failwith "Invalid operands for binary operator")
+       | _ -> raise(TypeError "Operandos inválidos"))
 
   | PairExpr (e1,e2) ->
       let v1 = eval env e1 in
@@ -261,9 +272,7 @@ let rec eval (env:envV) (e:expr) : (value) =
   | LetExpr (x, t, e1, e2) ->
       let v = eval env e1 in
       let env' = (x, v) :: env in
-      eval env' e2
-        
-
+      eval env' e2 
         
   | AppExpr(e1, e2) ->
       let exp1 = eval env e1 in
@@ -273,12 +282,29 @@ let rec eval (env:envV) (e:expr) : (value) =
        | VRecClosure(f, x, e, env'), value -> eval (update_envV (update_envV env' x value) f (VRecClosure(f, x, e, env')) ) e
        | _ -> raise (EvalError "Erro de avaliação"))
 
+  | ConsExpr(e1, e2) ->
+      let v1 = eval env e1 in
+      let v2 = eval env e2 in
+      VCons(v1, v2)
+  | HeadExpr(e) ->
+      let v = eval env e in
+      (match v with
+       | VCons(v1, _) -> v1
+       | _ -> raise (EvalError "Erro de avaliação de lista"))
+  | TailExpr(e) ->
+      let v = eval env e in
+      (match v with
+       | VCons(_, v2) -> v2
+       | _ -> raise (EvalError "Erro de avaliação de lista"))
+      
+  | _ -> raise (EvalError "Erro de avaliação")
 
 
 
         (*testes typeInfer*)
 let envTest = [("x", IntType)] ;;
 let env2Test = [("f", (FuncType (IntType, IntType)))];; 
+
                
 let intExprTest = IntExpr(1);;
 let trueTest = BoolExpr(true);;
@@ -305,16 +331,15 @@ let matchMaybeExprTest = MatchMaybeExpr (justExprTest, "x", BinOpExpr (AddOp, Va
   
   
   
+    (*testes eval*)
+
+let env_test : envV = [
+  ("f", VClosure("x", FunExpr("y", IntType, BinOpExpr(AddOp, VarExpr("x"), VarExpr("y"))), []));
+  ("true", VBool(true));
+  ("false", VBool(false))
+]
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
+let appExprTestEval = AppExpr (appExprTest, binOpExprTest) (*Valor esperado com env_test = VInt 49 *)
   
   
   
