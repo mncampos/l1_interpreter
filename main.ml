@@ -135,7 +135,11 @@ let rec typeInfer (env:env) (e:expr) =
            (match (t1, t2) with
               (IntType, IntType) -> IntType
             | _ -> raise (TypeError "Operação aritmética aplicada a tipos inválidos"))
-       | LessThanOp | LessEqualOp | GreaterThanOp | GreaterEqualOp | EqualOp ->
+       | LessThanOp | LessEqualOp | GreaterThanOp | GreaterEqualOp ->
+           (match (t1, t2) with
+              (IntType, IntType) -> BoolType
+            | _ -> raise (TypeError "Operação de comparação aplicada a tipos inválidos")) 
+       | EqualOp ->
            (match (t1, t2) with
               (IntType, IntType) | (BoolType, BoolType) -> BoolType
             | _ -> raise (TypeError "Operação de comparação aplicada a tipos inválidos"))
@@ -232,10 +236,7 @@ let rec eval (env:envV) (e:expr) : (value) =
     
   | NothingExpr(t) -> VMaybe(None)
     
-  | JustExpr(e) ->
-      let v = eval env e in
-      (match v with 
-       | _ -> v)
+  | JustExpr(e) -> VMaybe (Some(eval env e))
   
   | BinOpExpr (op, e1, e2) ->
       let v1 = eval env e1 in
@@ -249,6 +250,7 @@ let rec eval (env:envV) (e:expr) : (value) =
        | (GreaterThanOp, VInt n1, VInt n2) -> VBool (n1 > n2)
        | (GreaterEqualOp, VInt n1, VInt n2) -> VBool (n1 >= n2)
        | (EqualOp, VInt n1, VInt n2) -> VBool (n1 = n2)
+       | (EqualOp, VBool b1, VBool b2) -> VBool (b1 = b2)
        | (AndOp, VBool b1, VBool b2) -> VBool (b1 && b2)
        | (OrOp, VBool b1, VBool b2) -> VBool (b1 || b2)
        | _ -> raise(TypeError "Operandos inválidos"))
@@ -274,7 +276,7 @@ let rec eval (env:envV) (e:expr) : (value) =
   
   | LetExpr (x, t, e1, e2) ->
       let v = eval env e1 in
-      let env' = (x, v) :: env in
+      let env' = update_envV env x v in
       eval env' e2 
         
   | LetRecExpr(f,t1,t2,x, e1, e2) when t1 = t2 ->
@@ -293,25 +295,27 @@ let rec eval (env:envV) (e:expr) : (value) =
       let v1 = eval env e1 in
       let v2 = eval env e2 in
       VCons(v1, v2)
+        
   | HeadExpr(e) ->
       let v = eval env e in
       (match v with
        | VCons(v1, _) -> v1
        | _ -> raise (EvalError "Erro de avaliação de lista"))
+      
   | TailExpr(e) ->
       let v = eval env e in
       (match v with
        | VCons(_, v2) -> v2
        | _ -> raise (EvalError "Erro de avaliação de lista"))
       
-  | MatchMaybeExpr (e1,x,e2,e3) -> (*ver se precisa do x mesmo*)
+  | MatchMaybeExpr (e1,x,e2,e3) -> 
       (let v1 = eval env e1 in
        match v1 with
        | VMaybe None -> eval env e2
        | VMaybe(Some y) -> eval (update_envV env x y) e3
        | _ -> raise (EvalError "erro"))
 
-  | MatchExpr (e1,e2, x, y, e3) -> (*ver se precisa do x mesmo*)
+  | MatchExpr (e1,e2, x, y, e3) -> 
       (let v1 = eval env e1 in
        match v1 with
        | VNil -> eval env e2
@@ -332,13 +336,17 @@ let intExprTest = IntExpr(1);;
 let trueTest = BoolExpr(true);;
 let falseTest = BoolExpr(false);;
 let binOpExprTest = BinOpExpr (AddOp, IntExpr 3, IntExpr 4);;  
+let binOpExprTest2 = BinOpExpr (EqualOp, IntExpr 3, IntExpr 4);;  
+let binOpExprTest3 = BinOpExpr (GreaterThanOp, IntExpr 3, IntExpr 4);; 
+let binOpExprTest4 = BinOpExpr (EqualOp, BoolExpr (true), BoolExpr(false));; 
 let ifExprTest = IfExpr (BoolExpr true, IntExpr 1, IntExpr 2) (* langType: IntType *)
 let varExprTest = VarExpr "x" (* langType: VarType "x" *)
 let appExprTest = AppExpr (VarExpr "f", IntExpr 42) (* langType: VarType "f" *)
 let funExprTest = FunExpr ("x", IntType, BinOpExpr (AddOp, VarExpr "x", IntExpr 1)) (* langType: FuncType (IntType, IntType) *)
+let funExprTest2 = FunExpr ("x",IntType, BinOpExpr (EqualOp, VarExpr "x", IntExpr 1))
 let letExprTest = LetExpr ("x", IntType, IntExpr 42, VarExpr "x") (* langType: IntType *) 
-let letRecExprTest = LetRecExpr ("f", FuncType (IntType, IntType), IntType, "x", BinOpExpr (AddOp, VarExpr "x", IntExpr 1), AppExpr (VarExpr "f", IntExpr 2)) (* langType: intType  *)
-let pairExprTest = PairExpr (IntExpr 1, BoolExpr true) (* langType: PairType (IntType, BoolType) *)
+let letRecExprTest = LetRecExpr ("f", FuncType (BoolType, BoolType), BoolType, "x", BinOpExpr (EqualOp, VarExpr "x", BoolExpr (true)), AppExpr (VarExpr "f", BoolExpr(true))) (* langType: intType  *)
+let pairExprTest = PairExpr (PairExpr (IntExpr 1, BoolExpr true), BoolExpr true) (* langType: PairType (IntType, BoolType) *) 
 let fstExprTest = FstExpr pairExprTest (* langType: IntType *)
 let sndExprTest = SndExpr pairExprTest (* langType: BoolType *)
 let nilExprTest = NilExpr (IntType) (* langType: ListType IntType *)
@@ -360,14 +368,35 @@ let env_test : envV = [
   ("false", VBool(false))
 ]
 
+
+let fact = 
+  FunExpr ("n", IntType,
+           IfExpr (BinOpExpr (LessEqualOp, VarExpr "n", IntExpr 1),
+                   IntExpr 1,
+                   BinOpExpr (MultOp, VarExpr "n", AppExpr (VarExpr "fact", BinOpExpr (SubOp, VarExpr "n", IntExpr 1)))))
+let t1 = FuncType (IntType, IntType) 
+let t2 = FuncType (IntType, IntType) 
+  
+let evalLet = LetExpr ("x", IntType, IntExpr 42, BinOpExpr (AddOp, VarExpr "x", IntExpr 1)) ;;
+let evalFun = FunExpr ("x", IntType, BinOpExpr (AddOp, VarExpr "x", IntExpr 1)) 
+let evalFun2 = FunExpr ("x",IntType, BinOpExpr (EqualOp, VarExpr "x", IntExpr 1)) 
+let evalJust = JustExpr(IntExpr 1);;
+let evalApp = AppExpr (evalFun, IntExpr 42);;
+let evalBinopp = BinOpExpr (EqualOp, BoolExpr (true), BoolExpr(false));; 
+let evalCons = ConsExpr (IntExpr 1, ConsExpr (IntExpr 2, NilExpr IntType));;
+let evalHead = HeadExpr evalCons;;
+let evalTail = TailExpr evalCons;;
 let evalMatchMaybe = (MatchMaybeExpr (NothingExpr (IntType), "y", JustExpr (IntExpr 1), VarExpr "y")) ;;   
-let appExprTestEval = AppExpr (appExprTest, binOpExprTest) (*Valor esperado com env_test = VInt 49 *)
+let appExprTestEval = AppExpr (appExprTest, binOpExprTest) 
 let valMatchExprTest = MatchExpr ( ConsExpr (IntExpr 1, ConsExpr (IntExpr 2, NilExpr IntType)), IntExpr 4, "x", "y", VarExpr "x");; 
-let randenv : envV = [("x", VMaybe (Some (VInt 10)))] 
-    (*| MatchMaybeExpr of expr * variable * expr * variable * expr *)
+let randenv : envV = [("x", VMaybe (Some (VInt 10)))] ;;
+let envTest2 : envV = [("fact",eval [] fact)];;
+let evalLetRec =  LetRecExpr ("fact", t1, t2, "", fact, AppExpr (VarExpr "fact", IntExpr 5));;
+                     
+let envTest3 : envV = [("factRec",eval [] evalLetRec)];;
 
   
+let evalApp2 = AppExpr (evalLetRec, IntExpr 4);;
 
-  
-  
+
   
